@@ -4,7 +4,7 @@
     <title>Weather Assistant</title>
 
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-
+    <meta http-equiv="refresh" content="300">
     <!-- Plotly -->
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
@@ -14,7 +14,7 @@
 <div class="container">
 
     <h1>🌦️ Weather Assistant</h1>
-
+    <button id="darkModeToggle">Toggle Dark Mode</button>
     <form method="POST">
 
         <input
@@ -76,9 +76,15 @@
             ];
 
             Plotly.newPlot("graph", data);
-
+            
         </script>
+        <script>
+  const toggleButton = document.getElementById('darkModeToggle');
 
+  toggleButton.addEventListener('click', () => {
+    document.body.classList.toggle('dark-mode');
+  });
+</script>
     {% endif %}
 
 
