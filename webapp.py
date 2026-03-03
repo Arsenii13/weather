@@ -3,7 +3,7 @@ import weather
 
 
 app = Flask(__name__)
-
+app.secret_key = 'coolkey'  # Replace with a secure key
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -12,7 +12,15 @@ def index():
     city = ""
     graph_data = None
 
+    # Inside your index() function, before POST request handling
+    if 'history' not in session:
+        session['history'] = []
 
+# After getting city from form
+    if city and city not in session['history']:
+        session['history'].append(city)
+    # Optional: limit history length
+        session['history'] = session['history'][-10:]
     if request.method == "POST":
 
         city = request.form.get("city")
@@ -53,7 +61,8 @@ def index():
         "index.html",
         result=result,
         city=city,
-        graph_data=graph_data
+        graph_data=graph_data,
+        history=session['history']
     )
 
 

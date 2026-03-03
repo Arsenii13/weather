@@ -15,7 +15,7 @@
 
     <h1>🌦️ Weather Assistant</h1>
     <button id="darkModeToggle">Toggle Dark Mode</button>
-    <form method="POST">
+    <form method="POST" id="search-form">
 
         <input
             type="text"
@@ -24,6 +24,12 @@
             required
             value="{{ city }}"
         >
+        <h2>Search History</h2>
+<ul>
+  {% for item in history %}
+    <li><a href="#" onclick="searchFromHistory('{{ item }}')">{{ item }}</a></li>
+  {% endfor %}
+</ul>
 
         <select name="mode">
 
@@ -57,7 +63,12 @@
     {% if graph_data %}
 
         <div class="graph" id="graph"></div>
-
+        <script>
+function searchFromHistory(city) {
+    document.getElementById('city-input').value = city;
+    document.getElementById('search-form').submit();
+}
+</script>
         <script>
 
             var data = [
