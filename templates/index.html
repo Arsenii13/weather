@@ -6,6 +6,12 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <meta http-equiv="refresh" content="300">
     <!-- Plotly -->
+     <link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet/dist/leaflet.css"
+/>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 
@@ -15,6 +21,7 @@
 
     <h1>🌦️ Weather Assistant</h1>
     <button id="darkModeToggle">Toggle Dark Mode</button>
+    <div id="map" style="height:300px;"></div>
     <form method="POST" id="search-form">
 
         <input
@@ -97,7 +104,20 @@ function searchFromHistory(city) {
   });
 </script>
     {% endif %}
+<script>
+var map = L.map("map").setView(
+  [{{ lat }}, {{ lon }}],
+  10
+);
 
+L.tileLayer(
+ "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+).addTo(map);
+
+L.marker([{{ lat }}, {{ lon }}])
+ .addTo(map)
+ .bindPopup("{{ city }}");
+</script>
 
 </div>
 
