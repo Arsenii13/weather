@@ -1,125 +1,105 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Weather Assistant</title>
-
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <meta http-equiv="refresh" content="300">
+    
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
     <!-- Plotly -->
-     <link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet/dist/leaflet.css"
-/>
-
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-</head>
 
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+        .container { width: 90%; max-width: 1000px; margin: auto; padding: 10px; }
+        h1 { text-align: center; margin-bottom: 10px; }
+        #map { height: 400px; margin-bottom: 15px; border-radius: 10px; }
+        .card { background: #f0f8ff; border-radius: 10px; padding: 10px; margin: 5px 0; }
+        .history-button { margin: 2px; padding: 5px 10px; border-radius: 5px; border: none; background: #87ceeb; color: #fff; cursor: pointer; }
+        .history-button:hover { background: #4682b4; }
+        #graph { height: 300px; margin-top: 10px; }
+        .dark-mode { background: #222; color: #eee; }
+        .dark-mode .card { background: #333; }
+    </style>
+</head>
 <body>
 
 <div class="container">
 
     <h1>🌦️ Weather Assistant</h1>
     <button id="darkModeToggle">Toggle Dark Mode</button>
-    <div id="map" style="height:300px;"></div>
+
+    <!-- Map -->
+    <div id="map"></div>
+
+    <!-- Search -->
     <form method="POST" id="search-form">
-
-        <input
-            type="text"
-            name="city"
-            placeholder="Enter city"
-            required
-            value="{{ city }}"
-        >
-        <h2>Search History</h2>
-<ul>
-  {% for item in history %}
-    <li><a href="#" onclick="searchFromHistory('{{ item }}')">{{ item }}</a></li>
-  {% endfor %}
-</ul>
-
+        <input type="text" name="city" id="city-input" placeholder="Enter city" required value="{{ city }}">
         <select name="mode">
-
             <option value="now">Current</option>
             <option value="hourly">By Hours</option>
             <option value="tomorrow">Tomorrow</option>
             <option value="week">7 Days</option>
-
         </select>
-
-        <button type="submit">
-            Get Weather
-        </button>
-
+        <button type="submit">Get Weather</button>
     </form>
 
+    <!-- Search history -->
+    <div>
+        <h2>Search History</h2>
+        {% for item in history %}
+            <button class="history-button" onclick="searchFromHistory('{{ item }}')">{{ item }}</button>
+        {% endfor %}
+    </div>
 
+    <!-- Weather info -->
     {% if result %}
-
-        <div class="result">
-
+        <div class="card">
             {% for line in result %}
-{{ line }}<br>
+                {{ line }}<br>
             {% endfor %}
-
         </div>
-
     {% endif %}
 
-
+    <!-- Plot graph -->
     {% if graph_data %}
-
-        <div class="graph" id="graph"></div>
+        <div class="card" id="graph"></div>
         <script>
-function searchFromHistory(city) {
-    document.getElementById('city-input').value = city;
-    document.getElementById('search-form').submit();
-}
-</script>
-        <script>
-
             var data = [
-                {
-                    x: {{ graph_data.dates | safe }},
-                    y: {{ graph_data.max | safe }},
-                    type: "scatter",
-                    name: "Max Temp"
-                },
-                {
-                    x: {{ graph_data.dates | safe }},
-                    y: {{ graph_data.min | safe }},
-                    type: "scatter",
-                    name: "Min Temp"
-                }
+                { x: {{ graph_data.dates | safe }}, y: {{ graph_data.max | safe }}, type: 'scatter', name: 'Max Temp' },
+                { x: {{ graph_data.dates | safe }}, y: {{ graph_data.min | safe }}, type: 'scatter', name: 'Min Temp' }
             ];
-
-            Plotly.newPlot("graph", data);
-            
+            Plotly.newPlot('graph', data);
         </script>
-        <script>
-  const toggleButton = document.getElementById('darkModeToggle');
-
-  toggleButton.addEventListener('click', () => {
-    document.body.classList.toggle('dark-mode');
-  });
-</script>
     {% endif %}
-<script>
-var map = L.map("map").setView(
-  [{{ lat }}, {{ lon }}],
-  10
-);
-
-L.tileLayer(
- "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-).addTo(map);
-
-L.marker([{{ lat }}, {{ lon }}])
- .addTo(map)
- .bindPopup("{{ city }}");
-</script>
 
 </div>
+
+<script>
+    // Dark mode
+    const toggleButton = document.getElementById('darkModeToggle');
+    toggleButton.addEventListener('click', () => {
+        document.body.classList.toggle('dark-mode');
+    });
+
+    // History search
+    function searchFromHistory(city) {
+        document.getElementById('city-input').value = city;
+        document.getElementById('search-form').submit();
+    }
+
+    // Leaflet map
+    var map = L.map('map').setView([{{ lat }}, {{ lon }}], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+    }).addTo(map);
+    var marker = L.marker([{{ lat }}, {{ lon }}]).addTo(map)
+        .bindPopup('{{ city }}').openPopup();
+</script>
 
 </body>
 </html>
