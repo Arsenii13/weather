@@ -9,15 +9,15 @@ import time
 # CONFIG
 # ===============================
 
-WEATHERAPI_KEY = os.getenv("WEATHERAPI_KEY")
-VISUAL_KEY = os.getenv("VISUAL_KEY")
+WEATHERAPI_KEY = "8c7a24be876f4df99f0153444260403"
+VISUAL_KEY = "MYHCGC7NJHBR8VLRFXJF8YFHF"
 
 HISTORY_FILE = "weather_history.json"
 WEIGHTS_FILE = "api_weights.json"
 
 
 # ===============================
-# INIT FILES
+# INIT STORAGE
 # ===============================
 
 def init_files():
@@ -27,6 +27,7 @@ def init_files():
             json.dump([], f)
 
     if not os.path.exists(WEIGHTS_FILE):
+
         weights = {
             "open-meteo": 1.0,
             "weatherapi": 1.0,
@@ -34,14 +35,14 @@ def init_files():
         }
 
         with open(WEIGHTS_FILE, "w") as f:
-            json.dump(weights, f)
+            json.dump(weights, f, indent=2)
 
 
 init_files()
 
 
 # ===============================
-# HELPERS
+# FILE HELPERS
 # ===============================
 
 def load_weights():
@@ -55,6 +56,7 @@ def save_weights(w):
 
 
 def save_history(data):
+
     with open(HISTORY_FILE) as f:
         hist = json.load(f)
 
@@ -65,11 +67,13 @@ def save_history(data):
 
 
 # ===============================
-# API FUNCTIONS
+# API: OPEN METEO
 # ===============================
 
 def open_meteo(city):
+
     try:
+        # Geocoding
         geo = requests.get(
             "https://geocoding-api.open-meteo.com/v1/search",
             params={"name": city, "count": 1},
@@ -82,33 +86,55 @@ def open_meteo(city):
         lat = geo["results"][0]["latitude"]
         lon = geo["results"][0]["longitude"]
 
+
+        # Weather
         r = requests.get(
             "https://api.open-meteo.com/v1/forecast",
             params={
                 "latitude": lat,
                 "longitude": lon,
-                "current_weather": True
+
+                "current_weather": True,
+
+                "hourly": [
+                    "relativehumidity_2m",
+                    "precipitation"
+                ],
+
+                "daily": [
+                    "uv_index_max"
+                ],
+
+                "timezone": "auto"
             },
             timeout=10
         ).json()
 
+
         w = r["current_weather"]
 
-        return {
-    "temp": w["temperature"],
-    "wind": w["windspeed"],
-    "source": "open-meteo",
 
-    "humidity": r["hourly"]["relativehumidity_2m"][0],
-    "precip": r["hourly"]["precipitation"][0],
-    "uv": r["daily"]["uv_index_max"][0]
-}
+        return {
+            "temp": w["temperature"],
+            "wind": w["windspeed"],
+
+            "humidity": r["hourly"]["relativehumidity_2m"][0],
+            "precip": r["hourly"]["precipitation"][0],
+            "uv": r["daily"]["uv_index_max"][0],
+
+            "source": "open-meteo"
+        }
 
     except:
         return None
 
 
+# ===============================
+# API: WEATHERAPI
+# ===============================
+
 def weatherapi(city):
+
     if not WEATHERAPI_KEY:
         return None
 
@@ -122,8 +148,18 @@ def weatherapi(city):
             timeout=10
         ).json()
 
+
+        c = r["current"]
+
+
         return {
-            "temp": r["current"]["temp_c"],
+            "temp": c["temp_c"],
+            "wind": c["wind_kph"],
+
+            "humidity": c["humidity"],
+            "uv": c["uv"],
+            "precip": c["precip_mm"],
+
             "source": "weatherapi"
         }
 
@@ -131,7 +167,12 @@ def weatherapi(city):
         return None
 
 
+# ===============================
+# API: VISUAL CROSSING
+# ===============================
+
 def visualcrossing(city):
+
     if not VISUAL_KEY:
         return None
 
@@ -146,8 +187,18 @@ def visualcrossing(city):
             timeout=10
         ).json()
 
+
+        c = r["currentConditions"]
+
+
         return {
-            "temp": r["currentConditions"]["temp"],
+            "temp": c["temp"],
+            "wind": c["windspeed"],
+
+            "humidity": c["humidity"],
+            "uv": c.get("uvindex", 0),
+            "precip": c.get("precip", 0),
+
             "source": "visualcrossing"
         }
 
@@ -164,10 +215,14 @@ def update_weights(real_temp):
     with open(HISTORY_FILE) as f:
         hist = json.load(f)
 
+    if not hist:
+        return
+
+
     weights = load_weights()
 
-    # Take last entry
     last = hist[-1]
+
 
     for api in last["raw"]:
 
@@ -176,21 +231,22 @@ def update_weights(real_temp):
 
         error = abs(predicted - real_temp)
 
-        # Smaller error = better weight
         score = max(0.1, 5 - error)
 
         weights[src] += score * 0.05
+
 
     save_weights(weights)
 
 
 # ===============================
-# SMART AI
+# SMART AI CORE
 # ===============================
 
 def smart_weather(city):
 
     weights = load_weights()
+
 
     sources = [
         open_meteo,
@@ -198,41 +254,67 @@ def smart_weather(city):
         visualcrossing
     ]
 
+
     results = []
 
+
+    # Collect API data
     for api in sources:
+
         d = api(city)
 
         if d and -60 < d["temp"] < 60:
             results.append(d)
+
 
     if not results:
         return None
 
 
     # -----------------------
-    # WEIGHTED AI AVERAGE
+    # Weighted Temperature
     # -----------------------
 
     total = 0
-    weight_sum = 0
+    wsum = 0
 
     for r in results:
 
         w = weights.get(r["source"], 1)
 
         total += r["temp"] * w
-        weight_sum += w
+        wsum += w
 
 
-    final_temp = round(total / weight_sum, 1)
+    final_temp = round(total / wsum, 1)
 
 
     # -----------------------
-    # CONFIDENCE
+    # Average Sensors
+    # -----------------------
+
+    def avg(key):
+
+        vals = [
+            r[key] for r in results
+            if r.get(key) is not None
+        ]
+
+        return round(statistics.mean(vals), 1)
+
+
+    final_wind = avg("wind")
+    final_humidity = avg("humidity")
+    final_uv = avg("uv")
+    final_precip = avg("precip")
+
+
+    # -----------------------
+    # Confidence
     # -----------------------
 
     temps = [r["temp"] for r in results]
+
     spread = max(temps) - min(temps)
 
     if spread < 2:
@@ -244,7 +326,7 @@ def smart_weather(city):
 
 
     # -----------------------
-    # SAVE DATA FOR LEARNING
+    # Save Learning Data
     # -----------------------
 
     save_history({
@@ -255,10 +337,21 @@ def smart_weather(city):
     })
 
 
+    # -----------------------
+    # Final Package
+    # -----------------------
+
     return {
         "city": city,
+
         "temperature": final_temp,
+        "wind": final_wind,
+        "humidity": final_humidity,
+        "uv": final_uv,
+        "precip": final_precip,
+
         "confidence": confidence,
+
         "sources": [r["source"] for r in results],
         "weights": weights
     }
