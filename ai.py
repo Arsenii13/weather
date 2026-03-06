@@ -96,7 +96,7 @@ def smart_current(city):
     pack = api.get_all_current(city)
 
     return {
-
+        "city": city, 
         "temp": _mix(pack, "temp"),
         "wind": _mix(pack, "wind"),
         "humidity": _mix(pack, "humidity"),
@@ -133,7 +133,7 @@ def smart_hourly(city):
             hour_pack[name] = data[i]
 
         result.append({
-
+            
             "time": _mix(hour_pack, "time"),
             "temp": _mix(hour_pack, "temp"),
             "humidity": _mix(hour_pack, "humidity"),
