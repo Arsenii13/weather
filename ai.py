@@ -1,296 +1,167 @@
 # ai.py
-
 import api
-import json
-import os
-import statistics
 
+# -------------------------
+# API weights (AI learning later)
+# -------------------------
 
-# =============================
-# CONFIG
-# =============================
-
-WEIGHT_FILE = "ai_weights.json"
-
-DEFAULT_WEIGHTS = {
+WEIGHTS = {
     "openmeteo": 1.0,
     "weatherapi": 1.0,
     "visual": 1.0
 }
 
 
-# =============================
-# LOAD / SAVE LEARNING
-# =============================
-
-def load_weights():
-
-    if not os.path.exists(WEIGHT_FILE):
-        return DEFAULT_WEIGHTS.copy()
-
-    with open(WEIGHT_FILE, "r") as f:
-        return json.load(f)
-
-
-def save_weights(w):
-
-    with open(WEIGHT_FILE, "w") as f:
-        json.dump(w, f, indent=2)
-
-
-# =============================
-# CLEAN DATA
-# =============================
-
-def _filter(values):
-
-    return [v for v in values if v is not None]
-
+# -------------------------
+# Helpers
+# -------------------------
 
 def _weighted_avg(values, weights):
+    """Weighted average supporting numbers OR lists"""
 
-    total = 0
-    wsum = 0
-
-    for v, w in zip(values, weights):
-
-        if v is None:
-            continue
-
-        total += v * w
-        wsum += w
-
-
-    if wsum == 0:
+    if not values:
         return None
 
-    return round(total / wsum, 2)
+    # hourly/week (lists)
+    if isinstance(values[0], list):
 
+        length = len(values[0])
+        result = []
 
-# =============================
-# CONFIDENCE
-# =============================
+        for i in range(length):
 
-def _confidence(values):
+            total = 0
+            total_w = 0
 
-    clean = _filter(values)
+            for v, w in zip(values, weights):
 
-    if len(clean) <= 1:
-        return "Low"
+                if i < len(v):
+                    total += v[i] * w
+                    total_w += w
 
-    std = statistics.stdev(clean)
-
-    if std < 0.8:
-        return "High"
-
-    if std < 2:
-        return "Medium"
-
-    return "Low"
-
-
-# =============================
-# CORE MIXER
-# =============================
-
-def _mix(data, field):
-
-    w = load_weights()
-
-    vals = [
-        data["openmeteo"].get(field),
-        data["weatherapi"].get(field),
-        data["visual"].get(field)
-    ]
-
-    weights = [
-        w["openmeteo"],
-        w["weatherapi"],
-        w["visual"]
-    ]
-
-
-    return (
-        _weighted_avg(vals, weights),
-        _confidence(vals)
-    )
-
-
-# =============================
-# AUTO LEARNING
-# =============================
-
-def _learn(data, real):
-
-    w = load_weights()
-
-    for src in w:
-
-        if src in data and data[src]["temp"]:
-
-            err = abs(data[src]["temp"] - real)
-
-            if err < 1:
-                w[src] += 0.05
+            if total_w == 0:
+                result.append(None)
             else:
-                w[src] -= 0.05
+                result.append(round(total / total_w, 1))
+
+        return result
+
+    # single value
+    total = 0
+    total_w = 0
+
+    for v, w in zip(values, weights):
+        total += v * w
+        total_w += w
+
+    if total_w == 0:
+        return None
+
+    return round(total / total_w, 1)
 
 
-    save_weights(w)
+def _mix(pack, key):
+    """Mix same parameter from multiple APIs"""
+
+    vals = []
+    weights = []
+
+    for name, data in pack.items():
+
+        if data is None:
+            continue
+
+        if key not in data:
+            continue
+
+        vals.append(data[key])
+        weights.append(WEIGHTS.get(name, 1))
+
+    if not vals:
+        return None
+
+    return _weighted_avg(vals, weights)
 
 
-# =============================
-# CURRENT
-# =============================
+# -------------------------
+# CURRENT WEATHER
+# -------------------------
 
 def smart_current(city):
 
-    raw = api.get_all_current(city)
-
-    if not raw:
-        return None
-
-
-    temp, conf = _mix(raw, "temp")
-    wind, _ = _mix(raw, "wind")
-    hum, _ = _mix(raw, "humidity")
-    uv, _ = _mix(raw, "uv")
-    rain, _ = _mix(raw, "precip")
-    code, _ = _mix(raw, "code")
-
+    pack = {
+        "openmeteo": api.get_openmeteo_current(city),
+        "weatherapi": api.get_weatherapi_current(city),
+        "visual": api.get_visual_current(city)
+    }
 
     return {
-        "city": city,
-
-        "temperature": temp,
-        "wind": wind,
-        "humidity": hum,
-
-        "uv": uv,
-        "precip": rain,
-        "code": int(code) if code else 0,
-
-        "confidence": conf
+        "temp": _mix(pack, "temp"),
+        "wind": _mix(pack, "wind"),
+        "humidity": _mix(pack, "humidity"),
+        "code": _mix(pack, "code")
     }
 
 
-# =============================
-# HOURLY
-# =============================
+# -------------------------
+# HOURLY WEATHER
+# -------------------------
 
 def smart_hourly(city):
 
-    raw = api.get_all_hourly(city)
-
-    if not raw:
-        return None
-
-
-    hours = []
-
-
-    for i in range(24):
-
-        pack = {
-            "openmeteo": raw["openmeteo"][i],
-            "weatherapi": raw["weatherapi"][i],
-            "visual": raw["visual"][i]
-        }
-
-
-        temp, _ = _mix(pack, "temp")
-        hum, _ = _mix(pack, "humidity")
-        rain, _ = _mix(pack, "precip")
-        code, _ = _mix(pack, "code")
-
-
-        hours.append({
-            "time": pack["openmeteo"]["time"],
-
-            "temp": temp,
-            "humidity": hum,
-            "precip": rain,
-            "code": int(code) if code else 0
-        })
-
-
-    return hours
-
-
-# =============================
-# TOMORROW
-# =============================
-
-def smart_tomorrow(city):
-
-    raw = api.get_all_tomorrow(city)
-
-    if not raw:
-        return None
-
-
-    temp_max, _ = _mix(raw, "max")
-    temp_min, _ = _mix(raw, "min")
-    uv, _ = _mix(raw, "uv")
-    rain, _ = _mix(raw, "precip")
-    code, _ = _mix(raw, "code")
-
+    pack = {
+        "openmeteo": api.get_openmeteo_hourly(city),
+        "weatherapi": api.get_weatherapi_hourly(city),
+        "visual": api.get_visual_hourly(city)
+    }
 
     return {
-        "date": raw["openmeteo"]["date"],
-
-        "max": temp_max,
-        "min": temp_min,
-
-        "uv": uv,
-        "precip": rain,
-
-        "code": int(code) if code else 0
+        "temp": _mix(pack, "temp"),
+        "wind": _mix(pack, "wind"),
+        "humidity": _mix(pack, "humidity"),
+        "code": _mix(pack, "code"),
+        "time": pack["openmeteo"]["time"] if pack["openmeteo"] else []
     }
 
 
-# =============================
-# WEEK
-# =============================
+# -------------------------
+# TOMORROW WEATHER
+# -------------------------
+
+def smart_tomorrow(city):
+
+    pack = {
+        "openmeteo": api.get_openmeteo_tomorrow(city),
+        "weatherapi": api.get_weatherapi_tomorrow(city),
+        "visual": api.get_visual_tomorrow(city)
+    }
+
+    return {
+        "temp_min": _mix(pack, "temp_min"),
+        "temp_max": _mix(pack, "temp_max"),
+        "wind": _mix(pack, "wind"),
+        "humidity": _mix(pack, "humidity"),
+        "code": _mix(pack, "code")
+    }
+
+
+# -------------------------
+# WEEK WEATHER
+# -------------------------
 
 def smart_week(city):
 
-    raw = api.get_all_week(city)
+    pack = {
+        "openmeteo": api.get_openmeteo_week(city),
+        "weatherapi": api.get_weatherapi_week(city),
+        "visual": api.get_visual_week(city)
+    }
 
-    if not raw:
-        return None
-
-
-    result = []
-
-
-    for i in range(len(raw["openmeteo"])):
-
-        pack = {
-            "openmeteo": raw["openmeteo"][i],
-            "weatherapi": raw["weatherapi"][i],
-            "visual": raw["visual"][i]
-        }
-
-
-        max_t, _ = _mix(pack, "max")
-        min_t, _ = _mix(pack, "min")
-        uv, _ = _mix(pack, "uv")
-        rain, _ = _mix(pack, "precip")
-        code, _ = _mix(pack, "code")
-
-
-        result.append({
-            "date": pack["openmeteo"]["date"],
-
-            "max": max_t,
-            "min": min_t,
-
-            "uv": uv,
-            "precip": rain,
-
-            "code": int(code) if code else 0
-        })
-
-
-    return result
+    return {
+        "temp_min": _mix(pack, "temp_min"),
+        "temp_max": _mix(pack, "temp_max"),
+        "wind": _mix(pack, "wind"),
+        "humidity": _mix(pack, "humidity"),
+        "code": _mix(pack, "code"),
+        "days": pack["openmeteo"]["days"] if pack["openmeteo"] else []
+    }
