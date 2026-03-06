@@ -89,7 +89,7 @@ def _mix(pack, key):
 
 def smart_current(city):
 
-    pack = get_all_current(city)
+    pack = api.get_all_current(city)
 
     return {
         "temp": _mix(pack, "temp"),
@@ -105,7 +105,7 @@ def smart_current(city):
 
 def smart_hourly(city):
 
-    pack = get_all_hourly(city)
+    pack = api.get_all_hourly(city)
 
     return {
         "temp": _mix(pack, "temp"),
@@ -122,7 +122,7 @@ def smart_hourly(city):
 
 def smart_tomorrow(city):
 
-    pack = get_all_tomorrow(city)
+    pack = api.get_all_tomorrow(city)
 
     return {
         "temp_min": _mix(pack, "temp_min"),
@@ -139,7 +139,7 @@ def smart_tomorrow(city):
 
 def smart_week(city):
 
-    pack = get_all_week(city)
+    pack = api.get_all_week(city)
 
     return {
         "temp_min": _mix(pack, "temp_min"),
