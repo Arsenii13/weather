@@ -89,11 +89,7 @@ def _mix(pack, key):
 
 def smart_current(city):
 
-    pack = {
-        "openmeteo": api.get_openmeteo_current(city),
-        "weatherapi": api.get_weatherapi_current(city),
-        "visual": api.get_visual_current(city)
-    }
+    pack = get_all_current(city)
 
     return {
         "temp": _mix(pack, "temp"),
@@ -109,11 +105,7 @@ def smart_current(city):
 
 def smart_hourly(city):
 
-    pack = {
-        "openmeteo": api.get_openmeteo_hourly(city),
-        "weatherapi": api.get_weatherapi_hourly(city),
-        "visual": api.get_visual_hourly(city)
-    }
+    pack = get_all_hourly(city)
 
     return {
         "temp": _mix(pack, "temp"),
@@ -130,11 +122,7 @@ def smart_hourly(city):
 
 def smart_tomorrow(city):
 
-    pack = {
-        "openmeteo": api.get_openmeteo_tomorrow(city),
-        "weatherapi": api.get_weatherapi_tomorrow(city),
-        "visual": api.get_visual_tomorrow(city)
-    }
+    pack = get_all_tomorrow(city)
 
     return {
         "temp_min": _mix(pack, "temp_min"),
@@ -151,11 +139,7 @@ def smart_tomorrow(city):
 
 def smart_week(city):
 
-    pack = {
-        "openmeteo": api.get_openmeteo_week(city),
-        "weatherapi": api.get_weatherapi_week(city),
-        "visual": api.get_visual_week(city)
-    }
+    pack = get_all_week(city)
 
     return {
         "temp_min": _mix(pack, "temp_min"),
